@@ -14,6 +14,35 @@ def create_look_ahead_mask(size):
     mask = 1 - tf.linalg.band_part(tf.ones((size, size)), -1, 0)
     return mask   # (seq_len, seq_len)
 
+def create_mask(inp, tgt):
+    """ 这里总共要计算三种 masking，
+    第一种是 encoding 阶段对于 source 端的 padding  mask
+    第二种是 decoder 阶段 self-attention 部分的 masked-multi-head-attention,这里不仅包括 padding mask，还包括 look ahead mask
+    第三种是 decoder 阶段 encoder_ouput 和 attented target 的交互 attention,这里仅仅包括 padding mask，而且与第一阶段一致，因为是 encoder output
+        作为 key 和 value 值. attented target 是 query.
+
+    :param inp:  [batch, inp_seq_len]
+    :param tgt:  [batch, tgt_seq_len]
+    :return:
+    """
+    # 第一种masking: encoding padding mask
+    enc_padding_amsk = create_padding_mask(inp)  # [batch, 1, 1, inp_seq_len]
+
+    # 第三种masking: decoding padding mask
+    # Used in the 2nd attention block in the decoder.
+    # This padding mask is used to mask the encoder outputs.
+    dec_padding_mask = create_padding_mask(inp)  # [batch, 1, 1, inp_seq_len]
+
+    # 第二种masking: combined mask
+    # Used in the 1st attention block in the decoder.
+    # It is used to pad and mask future tokens in the input received by
+    # the decoder.
+    look_ahead_mask = create_look_ahead_mask(tf.shape(tgt)[1])   # [tgt_seq_len, tgt_seq_len] 上三角都为1，下三角（包括对角线）都为0
+    dec_targrt_padding_mask = create_padding_mask(tgt)           # [batch, 1, 1, tgt_seq_len]
+    combined_mask = tf.maximum(dec_targrt_padding_mask, look_ahead_mask)    # [batch, 1, tgt_seq_len, tgt_seq_len]
+    # 对 [batch, 1,1, tgt_Seq_len] 第三个维度广播之后,然后再进行计算。不仅mask了future信息，还mask对应序列中的padding词
+    return enc_padding_amsk, combined_mask, dec_padding_mask
+
 def scaled_dot_product_attention(q, k, v, mask):
     """ caculate the attention weights.
     q, k, v must have matching leading dimensions.
@@ -101,8 +130,9 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         #  Final linear layer
         output = self.dense(concat_attention)  # [batch, q_len, d_model]
         return output, attention_weights
-# point-wise feed forward network
 
+
+# point-wise feed forward network
 def point_wise_feed_forward_network(d_model, dff):
   return tf.keras.Sequential([
       tf.keras.layers.Dense(dff, activation='relu'),  # (batch_size, seq_len, dff)

@@ -9,10 +9,6 @@ import matplotlib.pyplot as plt
 
 tf.executing_eagerly()
 
-MAX_LENGTH = 40
-BUFFER_SIZE = 20000
-BATCH_SIZE = 64
-
 # load data
 examples, metadata = tfds.load(name="ted_hrlr_translate/pt_to_en",
                                with_info=True,
@@ -34,33 +30,40 @@ tokenizer_en = tfds.features.text.SubwordTextEncoder.build_from_corpus(
 tokenizer_pt = tfds.features.text.SubwordTextEncoder.build_from_corpus(
     (pt.numpy() for pt, en in train_examples), target_vocab_size=2**13)
 
-# add start and end tokens
-def encode(lang1, lang2):
-    lang1 = [tokenizer_pt.vocab_size] + tokenizer_pt.encode(
-      lang1.numpy()) + [tokenizer_pt.vocab_size+1]   # add start and end token
+def get_dataset(MAX_LENGTH, BATCH_SIZE, BUFFER_SIZE):
+    # remove the length longer than 40
+    def filter_max_length(x, y, max_length=MAX_LENGTH):
+        return tf.logical_and(tf.size(x) <= max_length,
+                              tf.size(y) <= max_length)
 
-    lang2 = [tokenizer_en.vocab_size] + tokenizer_en.encode(
-      lang2.numpy()) + [tokenizer_en.vocab_size+1]
+    # add start and end tokens
+    def encode(lang1, lang2):
+        lang1 = [tokenizer_pt.vocab_size] + tokenizer_pt.encode(
+            lang1.numpy()) + [tokenizer_pt.vocab_size + 1]  # add start and end token
 
-    return lang1, lang2
+        lang2 = [tokenizer_en.vocab_size] + tokenizer_en.encode(
+            lang2.numpy()) + [tokenizer_en.vocab_size + 1]
 
-# remove the length longer than 40
-def filter_max_length(x, y, max_length=MAX_LENGTH):
-    return tf.logical_and(tf.size(x) <= max_length,
-                        tf.size(y) <= max_length)
+        return lang1, lang2
 
+    def tf_encode(pt, en):
+        return tf.py_function(encode, [pt, en], [tf.int64, tf.int64])
 
-def tf_encode(pt, en):
-    return tf.py_function(encode, [pt, en], [tf.int64, tf.int64])
+    train_dataset = train_examples.map(tf_encode)
+    train_dataset = train_dataset.filter(filter_max_length)
+    # cache the dataset to memory to get a speedup while reading from it.
+    train_dataset = train_dataset.cache()
+    train_dataset = train_dataset.shuffle(BUFFER_SIZE).padded_batch(
+        BATCH_SIZE, padded_shapes=([-1], [-1]))
+    train_dataset = train_dataset.prefetch(tf.data.experimental.AUTOTUNE)
+    val_dataset = val_examples.map(tf_encode)
+    val_dataset = val_dataset.filter(filter_max_length).padded_batch(
+        BATCH_SIZE, padded_shapes=([-1], [-1]))
+    return train_dataset, val_dataset
 
-train_dataset = train_examples.map(tf_encode)
-train_dataset = train_dataset.filter(filter_max_length)
-# cache the dataset to memory to get a speedup while reading from it.
-train_dataset = train_dataset.cache()
-train_dataset = train_dataset.shuffle(BUFFER_SIZE).padded_batch(
-    BATCH_SIZE, padded_shapes=([-1], [-1]))
-train_dataset = train_dataset.prefetch(tf.data.experimental.AUTOTUNE)
-val_dataset = val_examples.map(tf_encode)
-val_dataset = val_dataset.filter(filter_max_length).padded_batch(
-    BATCH_SIZE, padded_shapes=([-1], [-1]))
-
+if __name__ == "__main__":
+    train_dataset, val_dataset = get_dataset(20, 2, 1)
+    for batch, (inp, tgt) in enumerate(train_dataset):
+        if batch > 1:
+            break
+        print(inp.shape)
