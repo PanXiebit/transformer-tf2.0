@@ -60,6 +60,7 @@ def scaled_dot_product_attention(q, k, v, mask):
     # scale matmul_qk
     dk = tf.cast(tf.shape(k)[-1], tf.float32)
     scaled_attention_logits = matmul_qk / tf.sqrt(dk)
+    print(scaled_attention_logits.shape)
     # add the mask to the scaled tensor
     if mask is not None:
         scaled_attention_logits += (mask * 1e-9)

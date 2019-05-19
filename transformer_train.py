@@ -15,7 +15,7 @@ class Config():
     dropout_rate = 0.1
     max_length = 40
     buffer_size = 20000
-    batch_size = 16
+    batch_size = 32
 
 config = Config()
 
@@ -67,14 +67,17 @@ if ckpt_manager.latest_checkpoint:
 def train_step(inp, tgt):
     tgt_inp = tgt[:, :-1]
     tgt_real = tgt[:, 1:]
-    enc_padding_mask, combined_mask, dec_padding_mask = create_mask(inp, tgt)
+    print("tgt_inp.shape:", tgt_inp.shape)
+    print("tgt_real.shape:", tgt_real.shape)
+    enc_padding_mask, combined_mask, dec_padding_mask = create_mask(inp, tgt_inp)
+    print("mask.shape:", enc_padding_mask.shape, combined_mask.shape, dec_padding_mask.shape)
     with tf.GradientTape() as tape:
         predictions, _ = transformer(inp, tgt_inp,
                                      True,
                                      enc_padding_mask,
                                      combined_mask,
                                      dec_padding_mask)
-        print(tape.watched_variables())
+        # print(tape.watched_variables())
         loss = loss_function(tgt_real, predictions)
     gradients = tape.gradient(loss, transformer.trainable_variables)
     optimizer.apply_gradients(zip(gradients, transformer.trainable_variables))
@@ -83,7 +86,7 @@ def train_step(inp, tgt):
     train_loss(loss)
     train_accuracy(tgt_real, predictions)
 
-train_dataset = get_dataset(config.max_length, config.batch_size, config.buffer_size)
+train_dataset, test_dataset = get_dataset(config.max_length, config.batch_size, config.buffer_size)
 EPOCHS = 10
 for epoch in range(EPOCHS):
     start = time.time()

@@ -24,6 +24,7 @@ class Transformer(tf.keras.Model):
         return final_output, attention_weights
 
 if __name__ == "__main__":
+    print(tf.__version__)
     sample_transformer = Transformer(
         num_layers=2, d_model=512, num_heads=8, dff=2048,
         input_vocab_size=8500, target_vocab_size=8000)
