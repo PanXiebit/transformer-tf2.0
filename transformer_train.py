@@ -1,21 +1,11 @@
 import time
 import tensorflow as tf
 from train_helper.optim import CustomSchedule
-from data_process.dataset import tokenizer_pt, tokenizer_en, get_dataset
+from data_process.dataset import get_dataset
 from model.transformer import Transformer
 from model.multi_head_attention import create_mask
+from  model_config import Config
 
-class Config():
-    num_layers = 2
-    d_model = 32
-    dff = 32
-    num_heads = 1
-    input_vocab_size = tokenizer_pt.vocab_size + 2
-    target_vocab_size = tokenizer_en.vocab_size + 2
-    dropout_rate = 0.1
-    max_length = 40
-    buffer_size = 20000
-    batch_size = 32
 
 config = Config()
 
@@ -87,7 +77,7 @@ def train_step(inp, tgt):
     train_accuracy(tgt_real, predictions)
 
 train_dataset, test_dataset = get_dataset(config.max_length, config.batch_size, config.buffer_size)
-EPOCHS = 10
+EPOCHS = 20
 for epoch in range(EPOCHS):
     start = time.time()
     train_loss.reset_states()   # Resets all of the metric state variables.
