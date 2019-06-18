@@ -7,7 +7,6 @@ from model.multi_head_attention import create_mask
 config = Config()
 transformer = Transformer(config.num_layers, config.d_model, config.num_heads, config.dff,
                           config.input_vocab_size, config.target_vocab_size, config.dropout_rate)
-print(transformer)
 
 checkpoint_path = "./checkpoints/train"
 ckpt = tf.train.Checkpoint(transformer=transformer)
@@ -15,7 +14,7 @@ ckpt_manager = tf.train.CheckpointManager(ckpt, checkpoint_path, max_to_keep=5)
 # if a checkpoint exists, restore the latest checkpoint.
 if ckpt_manager.latest_checkpoint:
     ckpt.restore(ckpt_manager.latest_checkpoint)
-    print ('Latest checkpoint restored!!')
+    print ('Restored latest checkpoint {}'.format(ckpt_manager.latest_checkpoint))
 
 MAX_LENGTH = 40
 
